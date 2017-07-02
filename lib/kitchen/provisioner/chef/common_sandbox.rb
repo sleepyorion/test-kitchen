@@ -150,6 +150,9 @@ module Kitchen
                                                                         "The metadata.rb does not define the 'name' key." \
                                                                           " Please add: `name '<cookbook_name>'` to metadata.rb and retry")
 
+          # convert the cookbook name from uppercase to lowercase
+          cb_name.downcase!
+
           cb_path = File.join(tmpbooks_dir, cb_name)
 
           glob = Dir.glob("#{config[:kitchen_root]}/**")
