@@ -45,6 +45,7 @@ module Kitchen
       def create_sandbox
         super
         prepare_config_rb
+        prepare_script
       end
 
       def modern?
@@ -64,6 +65,17 @@ module Kitchen
 
       # (see Base#run_command)
       def run_command
+        ## begin of bootstrap
+        # added shell provision to run before converge
+        script = remote_path_join(
+         config[:root_path], File.basename(config[:script])
+        )
+
+        code = powershell_shell? ? %{& "#{script}"} : sudo(script)
+        prefix_command(wrap_shell_code(code))
+
+	## end of bootstrap
+
         config[:log_level] = "info" if !modern? && config[:log_level] = "auto"
         cmd = sudo(config[:chef_solo_path]).dup
                                            .tap { |str| str.insert(0, "& ") if powershell_shell? }
@@ -72,6 +84,38 @@ module Kitchen
       end
 
       private
+
+
+      def prepare_script
+        info("Preparing script")
+
+        if config[:script]
+          debug("Using script from #{config[:script]}")
+          FileUtils.cp_r(config[:script], sandbox_path)
+        else
+          prepare_stubbed_script
+        end
+
+        FileUtils.chmod(0755,
+                        File.join(sandbox_path, File.basename(config[:script])))
+      end
+
+      # Create a minimal, no-op script in the sandbox path.
+      #
+      # @api private
+      def prepare_stubbed_script
+        base = powershell_shell? ? "bootstrap.ps1" : "bootstrap.sh"
+        config[:script] = File.join(sandbox_path, base)
+        info("#{File.basename(config[:script])} not found " \
+          "so Kitchen will run a stubbed script. Is this intended?")
+        File.open(config[:script], "wb") do |file|
+          if powershell_shell?
+            file.write(%{Write-Host "NO BOOTSTRAP SCRIPT PRESENT`n"\n})
+          else
+            file.write(%{#!/bin/sh\necho "NO BOOTSTRAP SCRIPT PRESENT"\n})
+          end
+        end
+      end
 
       # Returns an Array of command line arguments for the chef client.
       #
